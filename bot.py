@@ -207,11 +207,11 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
     url_modelo = subir_a_pollinations(imagen_modelo_bytes)
     url_ropa = subir_a_pollinations(imagen_ropa_bytes)
 
-    prompt = (
-        "Virtual try-on: dress the person with the clothing from the second image. "
-        "Keep face, hair, skin, pose and background identical. "
-        "Only replace the outfit. photorealistic, high quality"
-    )
+   prompt = (
+    "Edit the outfit in this image. "
+    "Replace the current clothing with the garment shown. "
+    "Maintain all other elements unchanged."
+)
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
     params = {
