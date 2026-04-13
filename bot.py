@@ -182,7 +182,7 @@ def generar_imagen_sync(prompt, estilo="realista"):
     }
     body = {
         "prompt": prompt_final,
-        "model": "seedream",
+        "model": "flux",
         "width": 832,
         "height": 1216,
         "n": 1,
@@ -215,7 +215,7 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
     params = {
-        "model": "gptimage",
+        "model": "p-image-edit",
         "image": f"{url_modelo},{url_ropa}",
         "width": "1024",
         "height": "1024",
