@@ -125,7 +125,6 @@ def mejorar_prompt(prompt, estilo):
     for es, en in traducciones.items():
         prompt_en = prompt_en.replace(es, en)
 
-    # Detectar si es selfie o no
     es_selfie = "selfie" in prompt.lower()
 
     if es_selfie:
@@ -140,19 +139,19 @@ def mejorar_prompt(prompt, estilo):
         )
 
     mejoras = {
-      "realista": (
-    f"full body shot head to toe, wide angle, "
-    f"entire body visible in frame, "
-    f"{extra_telefono}"
-    f"sharp background in focus, no bokeh, "
-    f"natural skin texture, subtle pores, "
-    f"no heavy freckles, clean skin, "
-    f"professional quality photo, "
-    f"shot on iPhone 17 Pro Max, 4K resolution, "
-    f"natural soft lighting, true to life colors, "
-    f"ultra sharp details, high definition, "
-    f"unedited authentic photo, real environment"
-),
+        "realista": (
+            f"full body shot head to toe, wide angle, "
+            f"entire body visible in frame, "
+            f"{extra_telefono}"
+            f"background sharp and in focus no bokeh, "
+            f"natural skin texture, subtle pores, "
+            f"no heavy freckles, clean skin, "
+            f"professional quality photo, "
+            f"shot on iPhone 17 Pro Max, 4K resolution, "
+            f"natural soft lighting, true to life colors, "
+            f"ultra sharp details, high definition, "
+            f"unedited authentic photo, real environment"
+        ),
         "anime": (
             "anime style, high quality illustration, vibrant colors, "
             "japanese animation, detailed character design, studio quality"
@@ -207,15 +206,14 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
     url_modelo = subir_a_pollinations(imagen_modelo_bytes)
     url_ropa = subir_a_pollinations(imagen_ropa_bytes)
 
-   prompt = (
-    "Edit the outfit in this image. "
-    "Replace the current clothing with the garment shown. "
-    "Maintain all other elements unchanged."
-)
+    prompt = (
+        "The person wears the clothing item shown. "
+        "Keep all facial features and background the same."
+    )
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
     params = {
-        "model": "p-image-edit",
+        "model": "wan-image",
         "image": f"{url_modelo},{url_ropa}",
         "width": "1024",
         "height": "1024",
@@ -223,7 +221,9 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
     }
     headers = {"Authorization": f"Bearer {POLLINATIONS_KEY}"}
 
-    print(f">>> Usando GET endpoint con gptimage...")
+    print(f">>> Usando wan-image...")
+    print(f">>> URL modelo: {url_modelo}")
+    print(f">>> URL ropa: {url_ropa}")
     response = requests.get(url, headers=headers, params=params, timeout=120)
     print(f">>> Status: {response.status_code}")
 
@@ -331,7 +331,7 @@ async def recibir_foto_ropa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     modelo_bytes = context.user_data.get("modelo_bytes")
     print(f">>> Foto ropa: {len(ropa_bytes)} bytes")
 
-    msg = await update.message.reply_text("⏳ Procesando virtual try-on, espera 30-60 segundos...")
+    msg = await update.message.reply_text("⏳ Procesando cambio de ropa, espera 30-60 segundos...")
 
     try:
         loop = asyncio.get_event_loop()
