@@ -17,7 +17,7 @@ TOKEN = "8778689476:AAGGBgxAf0fWKLiXiO3JN6xWlqAtkDKFKMc"
 POLLINATIONS_KEY = "sk_CvmUKUkDU0xnzOTxya9y5JMKgaa16oux"
 HISTORIAL_FILE = "historial.json"
 
-ESPERANDO_FOTO_MODELO, ESPERANDO_FOTO_ROPA = range(2)
+ESPERANDO_FOTO_MODELO, ESPERANDO_FOTOS_ROPA = range(2)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -222,8 +222,6 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
     headers = {"Authorization": f"Bearer {POLLINATIONS_KEY}"}
 
     print(f">>> Usando wan-image...")
-    print(f">>> URL modelo: {url_modelo}")
-    print(f">>> URL ropa: {url_ropa}")
     response = requests.get(url, headers=headers, params=params, timeout=120)
     print(f">>> Status: {response.status_code}")
 
@@ -302,10 +300,11 @@ async def generar_desde_texto(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cmd_editar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+    context.user_data["fotos_ropa"] = []
     await update.message.reply_text(
         "👗 Vamos a cambiarle la ropa!\n\n"
         "📸 *Paso 1:* Envíame la foto de la MODELO\n"
-        "⚠️ La modelo debe estar de frente para mejores resultados",
+        "⚠️ La modelo debe estar de frente",
         parse_mode="Markdown"
     )
     return ESPERANDO_FOTO_MODELO
@@ -315,38 +314,66 @@ async def recibir_foto_modelo(update: Update, context: ContextTypes.DEFAULT_TYPE
     archivo = await foto.get_file()
     imagen_bytes = await archivo.download_as_bytearray()
     context.user_data["modelo_bytes"] = bytes(imagen_bytes)
+    context.user_data["fotos_ropa"] = []
     print(f">>> Foto modelo: {len(imagen_bytes)} bytes")
     await update.message.reply_text(
         "✅ Foto de modelo recibida!\n\n"
-        "👕 *Paso 2:* Ahora envíame la foto de la ROPA o CONJUNTO\n"
-        "⚠️ Mejor si la ropa está sobre fondo blanco",
+        "👕 *Paso 2:* Envíame las fotos de ROPA una por una\n\n"
+        "Cuando termines de enviar todas escribe /listo",
         parse_mode="Markdown"
     )
-    return ESPERANDO_FOTO_ROPA
+    return ESPERANDO_FOTOS_ROPA
 
-async def recibir_foto_ropa(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def recibir_fotos_ropa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     foto = update.message.photo[-1]
     archivo = await foto.get_file()
     ropa_bytes = await archivo.download_as_bytearray()
+
+    context.user_data["fotos_ropa"].append(bytes(ropa_bytes))
+    total = len(context.user_data["fotos_ropa"])
+
+    print(f">>> Foto ropa #{total} recibida")
+    await update.message.reply_text(
+        f"✅ Ropa #{total} recibida!\n\n"
+        f"Envía más fotos de ropa o escribe /listo para procesar"
+    )
+    return ESPERANDO_FOTOS_ROPA
+
+async def procesar_todas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     modelo_bytes = context.user_data.get("modelo_bytes")
-    print(f">>> Foto ropa: {len(ropa_bytes)} bytes")
+    fotos_ropa = context.user_data.get("fotos_ropa", [])
 
-    msg = await update.message.reply_text("⏳ Procesando cambio de ropa, espera 30-60 segundos...")
+    if not fotos_ropa:
+        await update.message.reply_text("❌ No enviaste ninguna foto de ropa!")
+        return ESPERANDO_FOTOS_ROPA
 
-    try:
-        loop = asyncio.get_event_loop()
-        imagen_editada = await loop.run_in_executor(
-            None, partial(cambiar_ropa_sync, modelo_bytes, bytes(ropa_bytes))
-        )
-        await update.message.reply_photo(
-            photo=BytesIO(imagen_editada),
-            caption="✅ Listo! Ropa cambiada 👗"
-        )
-        await msg.delete()
-        guardar_en_historial(update.message.from_user.id, "cambio de ropa", "editada")
-    except Exception as e:
-        print(f">>> ERROR: {e}")
-        await msg.edit_text(f"❌ Error: {str(e)}")
+    total = len(fotos_ropa)
+    msg = await update.message.reply_text(
+        f"⏳ Procesando {total} cambio(s) de ropa, espera..."
+    )
+
+    loop = asyncio.get_event_loop()
+    errores = 0
+
+    for i, ropa_bytes in enumerate(fotos_ropa, 1):
+        try:
+            await msg.edit_text(f"⏳ Procesando outfit {i} de {total}...")
+            imagen_editada = await loop.run_in_executor(
+                None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes)
+            )
+            await update.message.reply_photo(
+                photo=BytesIO(imagen_editada),
+                caption=f"✅ Outfit {i} de {total} 👗"
+            )
+            guardar_en_historial(update.message.from_user.id, f"cambio ropa {i}", "editada")
+        except Exception as e:
+            errores += 1
+            print(f">>> ERROR outfit {i}: {e}")
+            await update.message.reply_text(f"❌ Error en outfit {i}: {str(e)}")
+
+    await msg.edit_text(
+        f"✅ Listo! Procesados {total - errores} de {total} outfits 👗"
+    )
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -374,8 +401,13 @@ def main():
     conv_editar = ConversationHandler(
         entry_points=[CommandHandler('editar', cmd_editar)],
         states={
-            ESPERANDO_FOTO_MODELO: [MessageHandler(filters.PHOTO, recibir_foto_modelo)],
-            ESPERANDO_FOTO_ROPA: [MessageHandler(filters.PHOTO, recibir_foto_ropa)],
+            ESPERANDO_FOTO_MODELO: [
+                MessageHandler(filters.PHOTO, recibir_foto_modelo)
+            ],
+            ESPERANDO_FOTOS_ROPA: [
+                MessageHandler(filters.PHOTO, recibir_fotos_ropa),
+                CommandHandler('listo', procesar_todas)
+            ],
         },
         fallbacks=[CommandHandler('cancelar', cancelar)]
     )
@@ -387,6 +419,11 @@ def main():
     app.add_handler(conv_editar)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generar_desde_texto))
 
+    print("🤖 Bot corriendo...")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == '__main__':
+    main()
     print("🤖 Bot corriendo...")
     app.run_polling(drop_pending_updates=True)
 
