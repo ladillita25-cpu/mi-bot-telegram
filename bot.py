@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import os
+import random
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -201,14 +202,24 @@ def generar_imagen_sync(prompt, estilo="realista"):
     else:
         raise Exception(f"Formato desconocido: {list(item.keys())}")
 
-def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
+def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes, seed=None):
     print(">>> Subiendo imágenes a Pollinations media...")
     url_modelo = subir_a_pollinations(imagen_modelo_bytes)
     url_ropa = subir_a_pollinations(imagen_ropa_bytes)
 
+    if seed is None:
+        seed = random.randint(1, 999999)
+
     prompt = (
-        "The person wears the clothing item shown. "
-        "Keep all facial features and background the same."
+        "This is a clothing swap task. "
+        "Image 1 is the person. Image 2 is the exact garment to wear. "
+        "Requirements: "
+        "1. Copy the EXACT colors, patterns, textures and design from Image 2 garment. "
+        "2. Keep the persons face, hair, skin tone, body shape and pose from Image 1. "
+        "3. Keep the background and lighting from Image 1. "
+        "4. The garment must look identical to Image 2, same color, same pattern, same style. "
+        "5. Do not change or invent any clothing details. "
+        "High quality, photorealistic, accurate clothing reproduction."
     )
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
@@ -217,11 +228,12 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
         "image": f"{url_modelo},{url_ropa}",
         "width": "1024",
         "height": "1024",
-        "nologo": "true"
+        "nologo": "true",
+        "seed": str(seed)
     }
     headers = {"Authorization": f"Bearer {POLLINATIONS_KEY}"}
 
-    print(f">>> Usando wan-image...")
+    print(f">>> Usando wan-image con seed {seed}...")
     response = requests.get(url, headers=headers, params=params, timeout=120)
     print(f">>> Status: {response.status_code}")
 
@@ -319,7 +331,7 @@ async def recibir_foto_modelo(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(
         "✅ Foto de modelo recibida!\n\n"
         "👕 *Paso 2:* Envíame las fotos de ROPA una por una\n\n"
-        "Cuando termines de enviar todas escribe /listo",
+        "✅ Cuando termines escribe /listo",
         parse_mode="Markdown"
     )
     return ESPERANDO_FOTOS_ROPA
@@ -328,14 +340,12 @@ async def recibir_fotos_ropa(update: Update, context: ContextTypes.DEFAULT_TYPE)
     foto = update.message.photo[-1]
     archivo = await foto.get_file()
     ropa_bytes = await archivo.download_as_bytearray()
-
     context.user_data["fotos_ropa"].append(bytes(ropa_bytes))
     total = len(context.user_data["fotos_ropa"])
-
     print(f">>> Foto ropa #{total} recibida")
     await update.message.reply_text(
         f"✅ Ropa #{total} recibida!\n\n"
-        f"Envía más fotos de ropa o escribe /listo para procesar"
+        f"Envía más fotos o escribe /listo para procesar"
     )
     return ESPERANDO_FOTOS_ROPA
 
@@ -349,32 +359,39 @@ async def procesar_todas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     total = len(fotos_ropa)
     msg = await update.message.reply_text(
-        f"⏳ Procesando {total} cambio(s) de ropa, espera..."
+        f"⏳ Procesando {total} outfit(s), generando 2 versiones de cada uno..."
     )
 
     loop = asyncio.get_event_loop()
-    errores = 0
 
     for i, ropa_bytes in enumerate(fotos_ropa, 1):
         try:
             await msg.edit_text(f"⏳ Procesando outfit {i} de {total}...")
-            imagen_editada = await loop.run_in_executor(
-                None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes)
+
+            seed1 = random.randint(1, 999999)
+            seed2 = random.randint(1, 999999)
+
+            # Generar 2 versiones en paralelo
+            imagen1, imagen2 = await asyncio.gather(
+                loop.run_in_executor(None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes, seed1)),
+                loop.run_in_executor(None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes, seed2))
+            )
+
+            await update.message.reply_photo(
+                photo=BytesIO(imagen1),
+                caption=f"👗 Outfit {i} - Versión 1"
             )
             await update.message.reply_photo(
-                photo=BytesIO(imagen_editada),
-                caption=f"✅ Outfit {i} de {total} 👗"
+                photo=BytesIO(imagen2),
+                caption=f"👗 Outfit {i} - Versión 2"
             )
             guardar_en_historial(update.message.from_user.id, f"cambio ropa {i}", "editada")
+
         except Exception as e:
-            errores += 1
             print(f">>> ERROR outfit {i}: {e}")
             await update.message.reply_text(f"❌ Error en outfit {i}: {str(e)}")
 
-    await msg.edit_text(
-        f"✅ Listo! Procesados {total - errores} de {total} outfits 👗"
-    )
-
+    await msg.edit_text(f"✅ Listo! {total} outfit(s) procesados 👗")
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -419,11 +436,6 @@ def main():
     app.add_handler(conv_editar)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generar_desde_texto))
 
-    print("🤖 Bot corriendo...")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == '__main__':
-    main()
     print("🤖 Bot corriendo...")
     app.run_polling(drop_pending_updates=True)
 
