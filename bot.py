@@ -213,7 +213,7 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
     params = {
-        "model": "seedream-pro",
+        "model": "wan-image",
         "image": f"{url_modelo},{url_ropa}",
         "width": "1024",
         "height": "1024",
