@@ -202,24 +202,26 @@ def generar_imagen_sync(prompt, estilo="realista"):
     else:
         raise Exception(f"Formato desconocido: {list(item.keys())}")
 
-def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes, seed=None):
+def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes):
     print(">>> Subiendo imágenes a Pollinations media...")
     url_modelo = subir_a_pollinations(imagen_modelo_bytes)
     url_ropa = subir_a_pollinations(imagen_ropa_bytes)
 
-    if seed is None:
-        seed = random.randint(1, 999999)
+    seed = random.randint(1, 999999)
 
     prompt = (
-        "This is a clothing swap task. "
-        "Image 1 is the person. Image 2 is the exact garment to wear. "
-        "Requirements: "
-        "1. Copy the EXACT colors, patterns, textures and design from Image 2 garment. "
-        "2. Keep the persons face, hair, skin tone, body shape and pose from Image 1. "
-        "3. Keep the background and lighting from Image 1. "
-        "4. The garment must look identical to Image 2, same color, same pattern, same style. "
-        "5. Do not change or invent any clothing details. "
-        "High quality, photorealistic, accurate clothing reproduction."
+        "Clothing swap task. "
+        "Take the EXACT garment from Image 2 and put it on the person in Image 1. "
+        "CRITICAL RULES: "
+        "1. The garment LENGTH must be EXACTLY the same as in Image 2 - "
+        "if it is a short garment keep it short, if it is a mini short keep it mini, "
+        "if long keep it long, never change the length. "
+        "2. Copy EXACTLY: color, pattern, texture, cut, length, fit and style from Image 2. "
+        "3. Keep UNCHANGED: face, hair, skin tone, body, pose, background from Image 1. "
+        "4. Do NOT stretch, lengthen or shorten the garment under any circumstance. "
+        "5. Do NOT add or remove any design details from the garment. "
+        "6. Respect the exact proportions and fit of the garment as shown in Image 2. "
+        "Photorealistic, high quality result."
     )
 
     url = f"https://gen.pollinations.ai/image/{requests.utils.quote(prompt)}"
@@ -234,6 +236,8 @@ def cambiar_ropa_sync(imagen_modelo_bytes, imagen_ropa_bytes, seed=None):
     headers = {"Authorization": f"Bearer {POLLINATIONS_KEY}"}
 
     print(f">>> Usando wan-image con seed {seed}...")
+    print(f">>> URL modelo: {url_modelo}")
+    print(f">>> URL ropa: {url_ropa}")
     response = requests.get(url, headers=headers, params=params, timeout=120)
     print(f">>> Status: {response.status_code}")
 
@@ -316,7 +320,7 @@ async def cmd_editar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👗 Vamos a cambiarle la ropa!\n\n"
         "📸 *Paso 1:* Envíame la foto de la MODELO\n"
-        "⚠️ La modelo debe estar de frente",
+        "⚠️ La modelo debe estar de frente para mejores resultados",
         parse_mode="Markdown"
     )
     return ESPERANDO_FOTO_MODELO
@@ -359,7 +363,7 @@ async def procesar_todas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     total = len(fotos_ropa)
     msg = await update.message.reply_text(
-        f"⏳ Procesando {total} outfit(s), generando 2 versiones de cada uno..."
+        f"⏳ Procesando {total} outfit(s), espera..."
     )
 
     loop = asyncio.get_event_loop()
@@ -367,26 +371,14 @@ async def procesar_todas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, ropa_bytes in enumerate(fotos_ropa, 1):
         try:
             await msg.edit_text(f"⏳ Procesando outfit {i} de {total}...")
-
-            seed1 = random.randint(1, 999999)
-            seed2 = random.randint(1, 999999)
-
-            # Generar 2 versiones en paralelo
-            imagen1, imagen2 = await asyncio.gather(
-                loop.run_in_executor(None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes, seed1)),
-                loop.run_in_executor(None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes, seed2))
-            )
-
-            await update.message.reply_photo(
-                photo=BytesIO(imagen1),
-                caption=f"👗 Outfit {i} - Versión 1"
+            imagen = await loop.run_in_executor(
+                None, partial(cambiar_ropa_sync, modelo_bytes, ropa_bytes)
             )
             await update.message.reply_photo(
-                photo=BytesIO(imagen2),
-                caption=f"👗 Outfit {i} - Versión 2"
+                photo=BytesIO(imagen),
+                caption=f"✅ Outfit {i} de {total} 👗"
             )
             guardar_en_historial(update.message.from_user.id, f"cambio ropa {i}", "editada")
-
         except Exception as e:
             print(f">>> ERROR outfit {i}: {e}")
             await update.message.reply_text(f"❌ Error en outfit {i}: {str(e)}")
