@@ -16,8 +16,8 @@ from functools import partial
 
 # --- CONFIGURACIÓN ---
 TOKEN = "8778689476:AAGGBgxAf0fWKLiXiO3JN6xWlqAtkDKFKMc" #
-POLLINATIONS_KEY = "sk_D2WPFQYpfT1Rl5mJvFJ7bJhKZQMBVYBc" #
-HISTORIAL_FILE = "historial.json" #
+POLLINATIONS_KEY = os.getenv("POLLINATIONS_KEY") 
+HISTORIAL_FILE = "historial.json"[cite: 2]
 
 ESPERANDO_FOTO_MODELO, ESPERANDO_FOTOS_ROPA = range(2) #[cite: 2]
 
