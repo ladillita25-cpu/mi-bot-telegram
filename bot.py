@@ -15,7 +15,7 @@ from io import BytesIO
 from functools import partial
 
 TOKEN = "8778689476:AAGGBgxAf0fWKLiXiO3JN6xWlqAtkDKFKMc"
-POLLINATIONS_KEY = "sk_CvmUKUkDU0xnzOTxya9y5JMKgaa16oux"
+POLLINATIONS_KEY = "sk_D2WPFQYpfT1Rl5mJvFJ7bJhKZQMBVYBc"
 HISTORIAL_FILE = "historial.json"
 
 ESPERANDO_FOTO_MODELO, ESPERANDO_FOTOS_ROPA = range(2)
