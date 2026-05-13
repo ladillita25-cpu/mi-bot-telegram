@@ -5,6 +5,8 @@ import base64
 import json
 import os
 import random
+import threading  # Necesario para Render
+from http.server import BaseHTTPRequestHandler, HTTPServer # Necesario para Render
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -14,8 +16,24 @@ from telegram.ext import (
 from io import BytesIO
 from functools import partial
 
-TOKEN = "8778689476:AAGGBgxAf0fWKLiXiO3JN6xWlqAtkDKFKMc"
-POLLINATIONS_KEY = "sk_D2WPFQYpfT1Rl5mJvFJ7bJhKZQMBVYBc"
+# --- SERVIDOR DE SALUD PARA RENDER ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is alive")
+
+def run_health_server():
+    # Render asigna un puerto dinámico en la variable PORT
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    server.serve_forever()
+
+# --- CONFIGURACIÓN ---
+# Mantenemos tus tokens pero permitimos que Render los use desde 'Environment Variables'
+TOKEN = os.getenv("TELEGRAM_TOKEN", "8778689476:AAGGBgxAf0fWKLiXiO3JN6xWlqAtkDKFKMc")
+POLLINATIONS_KEY = os.getenv("POLLINATIONS_KEY", "sk_D2WPFQYpfT1Rl5mJvFJ7bJhKZQMBVYBc")
 HISTORIAL_FILE = "historial.json"
 
 ESPERANDO_FOTO_MODELO, ESPERANDO_FOTOS_ROPA = range(2)
@@ -405,6 +423,9 @@ async def cmd_historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, parse_mode="Markdown")
 
 def main():
+    # Iniciamos el servidor de salud en un hilo separado para Render
+    threading.Thread(target=run_health_server, daemon=True).start()
+
     app = Application.builder().token(TOKEN).build()
 
     conv_editar = ConversationHandler(
